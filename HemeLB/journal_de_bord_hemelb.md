@@ -198,3 +198,40 @@ make
 ```
 
 Intégration du chemin TinyXML dans `compile_hemelb.sh` via `-DCMAKE_PREFIX_PATH` puis nouvelle compilation.
+---
+
+# Phase 3 — Correction : mauvais dépôt (09/11/2026)
+
+## Diagnostic
+
+L'erreur `Could NOT find TinyXML` venait du dépôt cloné : `hemelb-emulator/hemelb` est le HemeLB « complet », qui attend ses dépendances installées sur le système. L'épreuve impose la variante **HemePure** :
+
+- CPU : `https://github.com/UCL-CCS/HemePure`
+- GPU : `https://github.com/UCL-CCS/HemePure-GPU` (branche `HIP-CUDA-ROCM_SL`)
+
+HemePure embarque TinyXML, ParMETIS, ctemplate et les en-têtes Boost dans `dep/` : on compile d'abord `dep/` (une fois), puis `src/`.
+
+## Points relevés dans le code avant de compiler
+
+| Constat | Fichier | Conséquence sur ROMEO |
+|---|---|---|
+| `HEMELB_USE_SSE3=ON` par défaut, ajoute `-msse3` | `HemePure/src/CMakeLists.txt` | GCC aarch64 refuse `-msse3` → `-DHEMELB_USE_SSE3=OFF -DHEMELB_USE_AVX2=OFF` |
+| `HEMELB_USE_VELOCITY_WEIGHTS_FILE=ON` par défaut (GPU) | `HemePure-GPU/src/CMakeLists.txt` | `OFF` : conditions en pression, pas de fichier de vitesses |
+| Entrée/sortie par défaut `NASHZEROTHORDERPRESSUREIOLET` | les deux | conforme à la consigne (pression/pression), forcé explicitement |
+| Le rang 0 ne calcule pas ; rang *r* → GPU `(r-1) % nGPU` | `HemePure-GPU/src/SimulationMaster.cu` | lancer 4N+1 rangs pour utiliser les 4N GPU |
+| Boost 1.83 téléchargé depuis internet par `dep/CMakeLists.txt` | les deux | pré-téléchargé sur le login dans `dep/src/` |
+| Timer « Simulation total » dans `report.txt` | `reporting/Timers.h` | base du calcul des MLUPS hors pré/post-traitement |
+
+## Scripts mis en place
+
+- `HemeLB/build/build_hemepure.sh` + `build.slurm` : variantes `cpu-vec` (-O3), `cpu-novec` (-O3 -fno-tree-vectorize), `gpu` (CUDA sm_90), `hemextract`.
+- `HemeLB/jobs/run_hemelb.slurm` : un run (CPU ou GPU), dossier unique par run, vérification de validité.
+- `HemeLB/jobs/campaign.sh` : phases `test`, `probe`, `cpu`, `gpu`, `profile`, `best`.
+- `HemeLB/tools/parse_hemelb.py`, `make_figures.py`, `HemeLB/visu/plot_hemextract.py`.
+
+## Prochaines étapes
+
+1. `sbatch HemeLB/build/build.slurm` → vérifier les 4 exécutables dans `~/scc_t4/bin/`.
+2. `campaign.sh test` (Bifurcation) → `status.txt` = VALID en CPU et GPU.
+3. `campaign.sh probe` → temps par pas, choix de `STUDY_STEPS`.
+4. Phases `cpu`, `gpu`, `profile`, `best`, puis figures et README.

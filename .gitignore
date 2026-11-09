@@ -1,0 +1,21 @@
+# Sorties Slurm : on ne versionne que les fichiers du meilleur run, copies dans <epreuve>/results/
+*/logs/*
+!*/logs/.gitkeep
+probe_*.out
+
+# Binaires et gros fichiers (ils vivent dans ~/scc_t4, pas dans git)
+*.so
+*.o
+*.sif
+*.gmy
+*.mp4
+!*/results/**/*.mp4
+
+# Python
+__pycache__/
+*.pyc
+
+# Fichiers temporaires
+init.txt
+.DS_Store
+Thumbs.db
